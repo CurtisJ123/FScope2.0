@@ -3,6 +3,9 @@
 #include "TerminalDisplay.h"
 #include "TerminalInput.h"
 
+#include "FileSystem.h"
+#include "FileEntry.h"
+
 class Application {
 public:
 	Application();
@@ -13,4 +16,5 @@ public:
 private:
 	TerminalDisplay terminalDisplay;
 	TerminalInput terminalInput;
+	FileSystem fileSystem;
 };

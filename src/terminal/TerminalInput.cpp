@@ -2,12 +2,10 @@
 
 TerminalInput::TerminalInput() = default;
 
-char TerminalInput::GetInput() {
+char TerminalInput::getInput() {
     char input;
-    while (true) {
-        std::cin >> input;
-        if (isValidInput(input)) return input;
-    }
+    std::cin >> input;
+    return input;
 }
 
 bool TerminalInput::isValidInput(char input) {

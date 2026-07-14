@@ -5,6 +5,6 @@
 class TerminalInput {
 public:
     TerminalInput();
-    char GetInput();
+    char getInput();
     bool isValidInput(char input);
 };

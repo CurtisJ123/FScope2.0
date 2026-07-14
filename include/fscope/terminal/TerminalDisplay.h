@@ -8,6 +8,10 @@ private:
 
 public:
     TerminalDisplay();
-    void Display() const;
+    void display() const;
     void setDisplayText(const std::string& dt);
+    void setDisplayText();
+    void clear();
+    void appendDisplayText(const std::string& at);
+    
 };
