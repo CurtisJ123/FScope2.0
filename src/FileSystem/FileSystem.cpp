@@ -1,6 +1,6 @@
 #include "FileSystem.h"
 
-FileSystem::FileSystem(){};
+FileSystem::FileSystem() : fileScanner(){}
 
 void FileSystem::initializeDrives()
 {
@@ -37,4 +37,10 @@ void FileSystem::initializeDrives()
 
         drive += widePath.length() + 1;
     }
+}
+
+
+std::uintmax_t FileSystem::getFileSize(FileEntry* entry){
+    fileScanner.setFileSize(entry);
+    return entry->size;
 }

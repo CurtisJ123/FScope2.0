@@ -7,4 +7,5 @@ public:
     TerminalInput();
     char getInput();
     bool isValidInput(char input);
+    std::string getPathInput();
 };

@@ -11,4 +11,14 @@ void Application::run(){
         terminalDisplay.appendDisplayText(" \n");
     }
     terminalDisplay.display();
+
+
+    terminalDisplay.setDisplayText("Please enter a file path to view its size\n");
+    terminalDisplay.display();
+    std::string path = terminalInput.getPathInput();
+    FileEntry* entry = new FileEntry();
+    entry->path = std::filesystem::path(path);
+    fileSystem.getFileSize(entry);
+    terminalDisplay.setDisplayText(std::to_string(entry->size));
+    terminalDisplay.display();
 }

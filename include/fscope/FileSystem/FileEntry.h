@@ -20,8 +20,4 @@ public:
 	explicit FileEntry(std::filesystem::path entryPath) : path(std::move(entryPath)){}
 	~FileEntry() = default;
 
-	void getChildren();
-
-	void calculateSize();
-
 };
