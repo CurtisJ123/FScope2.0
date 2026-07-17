@@ -10,6 +10,8 @@ public:
 
     void setFileSize(FileEntry* entry);
 
+    void setAllChildren(FileEntry* entry);
+
 private:
 };
 

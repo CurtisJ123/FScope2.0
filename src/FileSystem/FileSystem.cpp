@@ -29,7 +29,7 @@ void FileSystem::initializeDrives()
         std::filesystem::path drivePath{drive};
 
         auto entry = std::make_unique<FileEntry>(drivePath);
-        entry->name = drivePathName;
+        entry->path = drivePath;
         entry->isDirectory = true;
         entry->parent = nullptr;
 
@@ -41,6 +41,7 @@ void FileSystem::initializeDrives()
 
 
 std::uintmax_t FileSystem::getFileSize(FileEntry* entry){
-    fileScanner.setFileSize(entry);
+    if(entry->isDirectory) fileScanner.setAllChildren(entry);
+    else fileScanner.setFileSize(entry);
     return entry->size;
 }
