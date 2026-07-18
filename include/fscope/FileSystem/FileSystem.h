@@ -18,5 +18,5 @@ public:
 	std::vector<std::unique_ptr<FileEntry>> drives;
 
 	void initializeDrives();
-	std::uintmax_t getFileSize(FileEntry* entry);
+	std::uintmax_t scanEntry(FileEntry* entry);
 };

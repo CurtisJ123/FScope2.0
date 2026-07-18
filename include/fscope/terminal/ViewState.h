@@ -1,17 +1,20 @@
 #pragma once
 #include <string>
+#include <FileEntry.h>
 
 enum StateType{
     DriveSelection,
     Scanning,
-    DriveContents,
+    EntryContents,
     Error
 };
 
 enum ScanningState{
+    NotStarted,
+    InProgress,
     Complete,
     Partial,
-    Error
+    Failed
 };
 
 class ViewState
@@ -20,10 +23,11 @@ public:
     ViewState() = default;
     ~ViewState() = default;
 
-    int selectedIndex;
-    std::string statusMessage;
-    ScanningState scanningState;
-    StateType currentState;
+    int selectedIndex = 0;
+    std::string statusMessage = "";
+    ScanningState scanningState = NotStarted;
+    StateType currentState = DriveSelection;
+    FileEntry* selectedEntry = nullptr;
 
 
 private:

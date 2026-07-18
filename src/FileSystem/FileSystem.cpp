@@ -22,14 +22,10 @@ void FileSystem::initializeDrives()
     const wchar_t* drive = buffer.data();
 
     while (*drive != L'\0') {
-        // Logical drive paths are normally ASCII values such as L"C:\\".
         std::wstring widePath(drive);
-        std::string drivePathName(widePath.begin(), widePath.end());
-
         std::filesystem::path drivePath{drive};
 
         auto entry = std::make_unique<FileEntry>(drivePath);
-        entry->path = drivePath;
         entry->isDirectory = true;
         entry->parent = nullptr;
 
@@ -40,8 +36,8 @@ void FileSystem::initializeDrives()
 }
 
 
-std::uintmax_t FileSystem::getFileSize(FileEntry* entry){
-    if(entry->isDirectory) fileScanner.setAllChildren(entry);
-    else fileScanner.setFileSize(entry);
+std::uintmax_t FileSystem::scanEntry(FileEntry* entry){
+    if(entry->isDirectory) fileScanner.scanEntryRecursively(entry);
+    else fileScanner.calculateFileSize(entry);
     return entry->size;
 }

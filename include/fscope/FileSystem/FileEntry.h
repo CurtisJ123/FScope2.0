@@ -14,6 +14,8 @@ public:
 	FileEntry* parent = nullptr;
 	std::uintmax_t size = 0;
 	bool isDirectory = false;
+	bool scanFailed = false;
+	std::string scanError;
 
 	
 	FileEntry();

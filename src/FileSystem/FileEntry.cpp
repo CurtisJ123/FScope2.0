@@ -3,6 +3,13 @@
 FileEntry::FileEntry(){};
 
 std::string FileEntry::name() const{
-    if(!path.empty()) return path.filename().string();
-    else return "No path was assigned";
+    if (path.empty()) {
+        return "No path was assigned";
+    }
+
+    if (path == path.root_path()) {
+        return path.root_path().string();
+    }
+
+    return path.filename().string();
 }

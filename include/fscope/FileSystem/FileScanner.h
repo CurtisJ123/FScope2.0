@@ -8,9 +8,9 @@ public:
     FileScanner() = default;
     ~FileScanner() = default;
 
-    void setFileSize(FileEntry* entry);
+    void calculateFileSize(FileEntry* entry);
 
-    void setAllChildren(FileEntry* entry);
+    void scanEntryRecursively(FileEntry* entry);
 
 private:
 };

@@ -5,28 +5,111 @@ Application::Application()
 
 void Application::run(){
     fileSystem.initializeDrives();
-    terminalDisplay.clear();
-    terminalDisplay.fileSystem = &fileSystem;
-    int i = 0;
-    for(auto& drive : fileSystem.drives){
-        terminalDisplay.appendDisplayText(std::to_string(i));
-        terminalDisplay.appendDisplayText(drive->path.string());
-        terminalDisplay.appendDisplayText(" \n");
-        i++;
+
+    ViewState view;
+    view.currentState = StateType::DriveSelection;
+    terminalDisplay.display(fileSystem, view);
+
+    int choice = 0;
+    bool selectingDrive = true;
+
+    while(true){
+        // Read a valid menu selection.
+        while(true){
+            std::string input = terminalInput.readLine();
+
+            if (input == "q") {
+                return;
+            }
+            else if (input == "b") {
+                if (view.selectedEntry == nullptr) {
+                    continue;
+                }
+
+                if(view.selectedEntry->parent != nullptr){
+                    view.selectedEntry = view.selectedEntry->parent;
+                    view.currentState = StateType::EntryContents;
+                }else{
+                    view.selectedEntry = nullptr;
+                    view.currentState = StateType::DriveSelection;
+                    selectingDrive = true;
+                }
+                view.statusMessage.clear();
+                terminalDisplay.display(fileSystem, view);
+                continue;
+            }
+            else {
+                auto [end, error] = std::from_chars(input.data(), input.data() + input.size(), choice);
+
+                if (error != std::errc{} || end != input.data() + input.size()) {
+                    choice = 0;
+                }
+
+            }
+
+            if(selectingDrive){
+                if (choice < 1 ||
+                    choice > static_cast<int>(fileSystem.drives.size())) {
+                    view.statusMessage = "Invalid selection.";
+                    view.currentState = StateType::DriveSelection;
+                    terminalDisplay.display(fileSystem, view);
+                    continue;
+                }
+            }else{
+                if (view.selectedEntry == nullptr ||
+                    choice < 1 ||
+                    choice > static_cast<int>(view.selectedEntry->children.size())) {
+                    view.statusMessage = "Invalid selection.";
+                    view.currentState = StateType::EntryContents;
+                    terminalDisplay.display(fileSystem, view);
+                    continue;
+                }
+
+                const auto& selectedChild =
+                    view.selectedEntry->children.at(static_cast<std::size_t>(choice - 1));
+
+                if (!selectedChild->isDirectory) {
+                    view.statusMessage = "Please select a directory.";
+                    view.currentState = StateType::EntryContents;
+                    terminalDisplay.display(fileSystem, view);
+                    continue;
+                }
+            }
+            break;
+        }
+
+        view.selectedIndex = choice - 1;
+        view.statusMessage.clear();
+
+        if(selectingDrive){
+            view.selectedEntry =
+                fileSystem.drives.at(static_cast<std::size_t>(view.selectedIndex)).get();
+        }else{
+            view.selectedEntry =
+                view.selectedEntry->children.at(
+                    static_cast<std::size_t>(view.selectedIndex)).get();
+        }
+
+        if(selectingDrive) {
+            view.currentState = StateType::Scanning;
+            view.scanningState = ScanningState::InProgress;
+            terminalDisplay.display(fileSystem, view);
+
+            try {
+                fileSystem.scanEntry(view.selectedEntry);
+                view.scanningState = ScanningState::Complete;
+                view.currentState = StateType::EntryContents;
+            }
+            catch (const std::filesystem::filesystem_error& error) {
+                view.scanningState = ScanningState::Failed;
+                view.currentState = StateType::Error;
+                view.statusMessage = error.what();
+            }
+        } else {
+            view.currentState = StateType::EntryContents;
+        }
+
+        terminalDisplay.display(fileSystem, view);
+        selectingDrive = false;
     }
-    terminalDisplay.display();
-    
-
-    terminalDisplay.setDisplayText("Please enter a number of which drive you want size of\n");
-    terminalDisplay.display();
-    
-
-
-    char input = terminalInput.getInput();
-    int inputNum = input - '0';
-    auto& selectedDrive = fileSystem.drives[inputNum];
-
-    fileSystem.getFileSize(selectedDrive.get());
-    terminalDisplay.setDisplayText(std::to_string(selectedDrive->size));
-    terminalDisplay.display();
 }
