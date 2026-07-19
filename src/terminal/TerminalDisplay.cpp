@@ -136,24 +136,32 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             appendText("\n");
 
             appendText(std::format(
-                "{:>4}  {:<30} {:<12} {:>12}\n",
+                "{:>4}  {:<30} {:<12} {:>12} {:>9}\n",
                 "#",
                 "Name",
                 "Type",
-                "Size"
+                "Size",
+                "Parent %"
             ));
 
-            appendText(std::string(62, '-') + "\n");
+            appendText(std::string(72, '-') + "\n");
 
             for (std::size_t i = 0; i < view.selectedEntry->children.size(); ++i) {
                 const auto& child = view.selectedEntry->children[i];
                 const std::string entryType = child->isDirectory ? "Directory" : "File";
+                const double percentOfParent =
+                    view.selectedEntry->size == 0
+                        ? 0.0
+                        : static_cast<double>(child->size) /
+                            static_cast<double>(view.selectedEntry->size) * 100.0;
+
                 appendText(std::format(
-                    "{:>4}. {:<30} {:<12} {:>12}\n",
+                    "{:>4}. {:<30} {:<12} {:>12} {:>8.1f}%\n",
                     i + 1,
                     child->name(),
                     entryType,
-                    formatSize(child->size)
+                    formatSize(child->size),
+                    percentOfParent
                 ));
             }
 
@@ -161,7 +169,7 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
                 appendText("\nNo child entries were found.\n");
             }
 
-            appendText("\nCommands: b = Back, q = Quit\n");
+            appendText("\nCommands: o = Open, b = Back, q = Quit\n");
 
             if (view.selectedEntry->children.empty()) {
                 appendText("Enter a command: ");

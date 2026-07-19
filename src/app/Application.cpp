@@ -38,7 +38,20 @@ void Application::run(){
                 terminalDisplay.display(fileSystem, view);
                 continue;
             }
-            else {
+            else if (input == "o") {
+                if (view.selectedEntry == nullptr) {
+                    view.statusMessage = "No directory is selected.";
+                }
+                else if (!openInFileManager(view.selectedEntry->path)) {
+                    view.statusMessage = "Could not open the directory.";
+                }
+                else {
+                    view.statusMessage = "Opened directory in File Explorer.";
+                }
+
+                terminalDisplay.display(fileSystem, view);
+                continue;
+            }else {
                 auto [end, error] = std::from_chars(input.data(), input.data() + input.size(), choice);
 
                 if (error != std::errc{} || end != input.data() + input.size()) {

@@ -8,29 +8,44 @@ void FileScanner::calculateFileSize(FileEntry* entry){
 }
 
 void FileScanner::scanEntryRecursively(FileEntry* entry){
+    entry->children.clear();
     if(entry->isDirectory){
         if (fs::exists(entry->path)) {
-            
-            for (const auto& e : fs::directory_iterator(entry->path)) {
-                std::unique_ptr<FileEntry> newFileEntry = std::make_unique<FileEntry>();
-                try {
-                    if(e._Is_symlink_or_junction()) newFileEntry->isDirectory = false;
-                    else if(e.is_directory()) newFileEntry->isDirectory = true;
-                    newFileEntry->parent = entry;
-                    newFileEntry->path = e.path();
-                    scanEntryRecursively(newFileEntry.get());
+            try{
+                for (const auto& e : fs::directory_iterator(entry->path)) {
+                    std::unique_ptr<FileEntry> newFileEntry = std::make_unique<FileEntry>();
+                    try {
+                        if(e._Is_symlink_or_junction()) newFileEntry->isDirectory = false;
+                        else if(e.is_directory()) newFileEntry->isDirectory = true;
+                        newFileEntry->parent = entry;
+                        newFileEntry->path = e.path();
+                        scanEntryRecursively(newFileEntry.get());
 
-                } catch (const std::exception& ex) {
-                    newFileEntry->scanFailed = true;
-                    newFileEntry->scanError = ex.what();
+                    } catch (const std::exception& ex) {
+                        newFileEntry->scanFailed = true;
+                        newFileEntry->scanError = ex.what();
+                    }
+                    entry->children.push_back(std::move(newFileEntry));
                 }
-                entry->children.push_back(std::move(newFileEntry));
             }
+            catch(const std::exception& e){
+                
+            }
+            
             uintmax_t directorySize = 0;
             for(auto& child : entry->children){
                 directorySize += child->size;
             }
             entry->size = directorySize;
+            
+            std::sort(entry->children.begin(), entry->children.end(), 
+                [](const std::unique_ptr<FileEntry>& a, const std::unique_ptr<FileEntry>& b) {
+                    if (a->size != b->size) {
+                        return a->size > b->size;
+                    }
+
+                    return a->name() < b->name();
+                });
         }
     }else{
         calculateFileSize(entry);

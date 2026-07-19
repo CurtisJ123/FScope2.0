@@ -6,6 +6,8 @@
 #include "FileSystem.h"
 #include "FileEntry.h"
 
+#include "PlatformShell.h"
+
 #include <charconv>
 
 
