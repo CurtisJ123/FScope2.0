@@ -9,6 +9,7 @@
 #include "PlatformShell.h"
 
 #include <charconv>
+#include <thread>
 
 
 class Application {

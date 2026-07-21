@@ -16,6 +16,7 @@ public:
 	bool isDirectory = false;
 	bool scanFailed = false;
 	std::string scanError;
+	long long fileCount = 0;
 
 	
 	FileEntry();

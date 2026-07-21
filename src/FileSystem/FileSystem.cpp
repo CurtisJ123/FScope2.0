@@ -37,7 +37,9 @@ void FileSystem::initializeDrives()
 
 
 std::uintmax_t FileSystem::scanEntry(FileEntry* entry){
-    if(entry->isDirectory) fileScanner.scanEntryRecursively(entry);
+    
+    if(entry->isDirectory) fileScanner.scanEntryRecursively(entry, progress);
     else fileScanner.calculateFileSize(entry);
+    progress.finished = true;
     return entry->size;
 }

@@ -109,7 +109,23 @@ void Application::run(){
             terminalDisplay.display(fileSystem, view);
 
             try {
-                fileSystem.scanEntry(view.selectedEntry);
+                std::jthread worker([&] {
+                    fileSystem.scanEntry(view.selectedEntry);
+                });
+                
+                std::uint64_t lastFileCount = 0;
+                auto lastUpdate = std::chrono::steady_clock::now();
+                while(fileSystem.progress.finished == false){
+                    auto currentCount = fileSystem.progress.filesScanned.load();
+                    auto now = std::chrono::steady_clock::now();
+                    if (currentCount != lastFileCount ||
+                        now - lastUpdate >= std::chrono::seconds(1)) {
+                        terminalDisplay.display(fileSystem, view);
+                        lastFileCount = currentCount;
+                        lastUpdate = now;
+                    }
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
                 view.scanningState = ScanningState::Complete;
                 view.currentState = StateType::EntryContents;
             }

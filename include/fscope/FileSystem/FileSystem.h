@@ -16,6 +16,7 @@ public:
 
 	FileScanner fileScanner;  
 	std::vector<std::unique_ptr<FileEntry>> drives;
+	ScanProgress progress;
 
 	void initializeDrives();
 	std::uintmax_t scanEntry(FileEntry* entry);

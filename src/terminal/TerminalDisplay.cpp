@@ -87,7 +87,10 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             if (view.selectedEntry == nullptr) {
                 appendText("Scanning...");
             } else {
-                appendText(std::format("Scanning {}...", view.selectedEntry->name()));
+                appendText(std::format("Scanning {}...\n", view.selectedEntry->name()));
+                appendText(std::format("File Count: {}...\n", fileSystem.progress.filesScanned.load()));
+                appendText(std::format("Size {}...\n", formatSize(fileSystem.progress.bytesScanned.load())));
+                appendText(std::format("Failed Entries {}...\n", fileSystem.progress.failedEntries.load()));
             }
             break;
 
