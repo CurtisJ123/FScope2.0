@@ -20,6 +20,12 @@
       "displayName": "Windows Debug",
       "configurePreset": "windows-msvc",
       "configuration": "Debug"
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release"
     }
   ]
 }

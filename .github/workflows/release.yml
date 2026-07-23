@@ -1,0 +1,102 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Windows x64
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure
+        run: cmake --preset windows-msvc -DBUILD_SHARED_LIBS=OFF
+
+      - name: Build Release
+        run: cmake --build --preset windows-release
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          & ".\build\Release\FScope.exe" --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "The Release executable failed its version check."
+          }
+
+      - name: Package release assets
+        shell: pwsh
+        run: |
+          $dist = Join-Path $PWD "dist"
+          $package = Join-Path $dist "FScope-windows-x64"
+
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+
+          Copy-Item `
+            ".\build\Release\FScope.exe" `
+            (Join-Path $dist "fscope.exe")
+          Copy-Item `
+            ".\build\Release\FScope.exe" `
+            (Join-Path $package "fscope.exe")
+          Copy-Item ".\scripts\install.ps1" $package
+          Copy-Item ".\scripts\uninstall.ps1" $package
+          Copy-Item ".\README.md" $package
+
+          Compress-Archive `
+            -Path (Join-Path $package "*") `
+            -DestinationPath (Join-Path $dist "FScope-windows-x64.zip")
+
+          $assetNames = @(
+            "fscope.exe",
+            "FScope-windows-x64.zip"
+          )
+          $checksums = foreach ($assetName in $assetNames) {
+            $assetPath = Join-Path $dist $assetName
+            $hash = (
+              Get-FileHash -LiteralPath $assetPath -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            "$hash  $assetName"
+          }
+
+          Set-Content `
+            -LiteralPath (Join-Path $dist "SHA256SUMS.txt") `
+            -Value $checksums `
+            -Encoding ascii
+
+          Set-Content `
+            -LiteralPath (Join-Path $dist "fscope.exe.sha256") `
+            -Value $checksums[0] `
+            -Encoding ascii
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $arguments = @(
+            "release",
+            "create",
+            $env:GITHUB_REF_NAME,
+            "dist/fscope.exe#Standalone Windows x64 executable",
+            "dist/fscope.exe.sha256#fscope.exe SHA-256 checksum",
+            "dist/FScope-windows-x64.zip#Windows x64 package",
+            "dist/SHA256SUMS.txt#SHA-256 checksums",
+            "--repo",
+            $env:GITHUB_REPOSITORY,
+            "--verify-tag",
+            "--generate-notes",
+            "--title",
+            "FScope $env:GITHUB_REF_NAME"
+          )
+
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }

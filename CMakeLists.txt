@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.20)
 
 project(FScope VERSION 0.1.0 LANGUAGES CXX)
 
+if(MSVC)
+    set(
+        CMAKE_MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    )
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -31,6 +38,11 @@ target_include_directories(FScope PRIVATE
 )
 
 target_link_libraries(FScope PRIVATE ftxui::ftxui)
+target_compile_definitions(
+    FScope
+    PRIVATE
+    FSCOPE_VERSION="${PROJECT_VERSION}"
+)
 
 if(WIN32)
     target_link_libraries(FScope PRIVATE Shell32)
