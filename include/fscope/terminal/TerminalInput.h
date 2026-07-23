@@ -10,5 +10,5 @@ public:
     int readNumber();
     bool isAlphanumericInput(char input);
     std::string readPath();
-    std::string readLine();
+    bool readLine(std::string& line);
 };

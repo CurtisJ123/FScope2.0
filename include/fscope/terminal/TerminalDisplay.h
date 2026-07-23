@@ -6,8 +6,6 @@
 #include <array>
 #include <format>
 #include <string_view>
-#include <vector>
-#include <algorithm>
 
 
 class TerminalDisplay {

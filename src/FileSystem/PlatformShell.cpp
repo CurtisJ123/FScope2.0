@@ -7,6 +7,10 @@
 
 bool openInFileManager(const std::filesystem::path& path)
 {
+    if (path.empty()) {
+        return false;
+    }
+
 #ifdef _WIN32
     const auto result = reinterpret_cast<INT_PTR>(
         ShellExecuteW(

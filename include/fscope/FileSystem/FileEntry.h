@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
@@ -14,9 +15,10 @@ public:
 	FileEntry* parent = nullptr;
 	std::uintmax_t size = 0;
 	bool isDirectory = false;
+	bool isLink = false;
 	bool scanFailed = false;
 	std::string scanError;
-	long long fileCount = 0;
+	std::uint64_t fileCount = 0;
 
 	
 	FileEntry();

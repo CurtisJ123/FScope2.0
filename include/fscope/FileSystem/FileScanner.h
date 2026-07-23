@@ -1,4 +1,6 @@
 #pragma once
+#include <atomic>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include "FileEntry.h"
@@ -9,6 +11,14 @@ struct ScanProgress {
     std::atomic<std::uint64_t> directoriesScanned{0};
     std::atomic<std::uint64_t> failedEntries{0};
     std::atomic<bool> finished{false};
+
+    void reset() noexcept {
+        bytesScanned.store(0);
+        filesScanned.store(0);
+        directoriesScanned.store(0);
+        failedEntries.store(0);
+        finished.store(false);
+    }
 };
 
 class FileScanner {

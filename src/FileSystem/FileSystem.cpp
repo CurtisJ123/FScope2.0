@@ -1,4 +1,5 @@
 #include "FileSystem.h"
+#include <stdexcept>
 
 FileSystem::FileSystem() : fileScanner(){}
 
@@ -37,9 +38,10 @@ void FileSystem::initializeDrives()
 
 
 std::uintmax_t FileSystem::scanEntry(FileEntry* entry){
-    
-    if(entry->isDirectory) fileScanner.scanEntryRecursively(entry, progress);
-    else fileScanner.calculateFileSize(entry);
-    progress.finished = true;
+    if (entry == nullptr) {
+        throw std::invalid_argument("Cannot scan a null file entry.");
+    }
+
+    fileScanner.scanEntryRecursively(entry, progress);
     return entry->size;
 }

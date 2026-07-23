@@ -1,16 +1,16 @@
 #include "TerminalInput.h"
-
+#include <cctype>
 
 TerminalInput::TerminalInput() = default;
 
 char TerminalInput::readCharacter() {
-    char input;
+    char input{};
     std::cin >> input;
     return input;
 }
 
 int TerminalInput::readNumber() {
-    int input;
+    int input{};
 
     if (std::cin >> input) {
         return input;
@@ -21,14 +21,12 @@ int TerminalInput::readNumber() {
     return -1;
 }
 
-std::string TerminalInput::readLine(){
-    std::string line;
-    std::getline(std::cin, line);
-    return line;
+bool TerminalInput::readLine(std::string& line){
+    return static_cast<bool>(std::getline(std::cin, line));
 }
 
 bool TerminalInput::isAlphanumericInput(char input) {
-    return isalnum(input);
+    return std::isalnum(static_cast<unsigned char>(input)) != 0;
 }
 
 std::string TerminalInput::readPath(){

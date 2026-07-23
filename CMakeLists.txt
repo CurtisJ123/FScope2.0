@@ -24,3 +24,9 @@ if(WIN32)
 endif()
 
 target_compile_features(FScope PRIVATE cxx_std_20)
+
+if(MSVC)
+    target_compile_options(FScope PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(FScope PRIVATE -Wall -Wextra -Wpedantic)
+endif()

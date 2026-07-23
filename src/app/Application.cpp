@@ -1,4 +1,55 @@
 #include "Application.h"
+#include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <chrono>
+#include <exception>
+#include <format>
+#include <thread>
+#include <utility>
+
+namespace {
+
+std::string normalizeInput(std::string input) {
+    const auto isNotWhitespace = [](unsigned char character) {
+        return std::isspace(character) == 0;
+    };
+
+    input.erase(
+        input.begin(),
+        std::find_if(
+            input.begin(),
+            input.end(),
+            [&](char character) {
+                return isNotWhitespace(static_cast<unsigned char>(character));
+            }
+        )
+    );
+
+    input.erase(
+        std::find_if(
+            input.rbegin(),
+            input.rend(),
+            [&](char character) {
+                return isNotWhitespace(static_cast<unsigned char>(character));
+            }
+        ).base(),
+        input.end()
+    );
+
+    std::transform(
+        input.begin(),
+        input.end(),
+        input.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        }
+    );
+
+    return input;
+}
+
+}
 
 Application::Application()
     : terminalDisplay(), terminalInput(), fileSystem() {}
@@ -16,7 +67,12 @@ void Application::run(){
     while(true){
         // Read a valid menu selection.
         while(true){
-            std::string input = terminalInput.readLine();
+            std::string input;
+            if (!terminalInput.readLine(input)) {
+                return;
+            }
+
+            input = normalizeInput(std::move(input));
 
             if (input == "q") {
                 return;
@@ -106,33 +162,72 @@ void Application::run(){
         if(selectingDrive) {
             view.currentState = StateType::Scanning;
             view.scanningState = ScanningState::InProgress;
+            fileSystem.progress.reset();
             terminalDisplay.display(fileSystem, view);
 
             try {
-                std::jthread worker([&] {
-                    fileSystem.scanEntry(view.selectedEntry);
-                });
-                
-                std::uint64_t lastFileCount = 0;
-                auto lastUpdate = std::chrono::steady_clock::now();
-                while(fileSystem.progress.finished == false){
-                    auto currentCount = fileSystem.progress.filesScanned.load();
-                    auto now = std::chrono::steady_clock::now();
-                    if (currentCount != lastFileCount ||
-                        now - lastUpdate >= std::chrono::seconds(1)) {
-                        terminalDisplay.display(fileSystem, view);
-                        lastFileCount = currentCount;
-                        lastUpdate = now;
+                std::exception_ptr scanError;
+                FileEntry* const entryToScan = view.selectedEntry;
+
+                std::jthread worker([this, entryToScan, &scanError] {
+                    try {
+                        fileSystem.scanEntry(entryToScan);
+                    } catch (...) {
+                        scanError = std::current_exception();
                     }
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                    fileSystem.progress.finished.store(true);
+                });
+
+                while (!fileSystem.progress.finished.load()) {
+                    terminalDisplay.display(fileSystem, view);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(250));
                 }
-                view.scanningState = ScanningState::Complete;
-                view.currentState = StateType::EntryContents;
+
+                worker.join();
+
+                if (scanError != nullptr) {
+                    std::rethrow_exception(scanError);
+                }
+
+                const std::uint64_t failedEntries =
+                    fileSystem.progress.failedEntries.load();
+
+                if (entryToScan->scanFailed &&
+                    entryToScan->children.empty()) {
+                    view.scanningState = ScanningState::Failed;
+                    view.currentState = StateType::Error;
+                    view.statusMessage =
+                        entryToScan->scanError.empty()
+                            ? "The selected drive could not be scanned."
+                            : entryToScan->scanError;
+                } else if (failedEntries > 0) {
+                    view.scanningState = ScanningState::Partial;
+                    view.statusMessage = std::format(
+                        "{} {} could not be fully scanned.",
+                        failedEntries,
+                        failedEntries == 1 ? "entry" : "entries"
+                    );
+                    view.currentState = StateType::EntryContents;
+                } else {
+                    view.scanningState = ScanningState::Complete;
+                    view.currentState = StateType::EntryContents;
+                }
             }
             catch (const std::filesystem::filesystem_error& error) {
                 view.scanningState = ScanningState::Failed;
                 view.currentState = StateType::Error;
                 view.statusMessage = error.what();
+            }
+            catch (const std::exception& error) {
+                view.scanningState = ScanningState::Failed;
+                view.currentState = StateType::Error;
+                view.statusMessage = error.what();
+            }
+            catch (...) {
+                view.scanningState = ScanningState::Failed;
+                view.currentState = StateType::Error;
+                view.statusMessage = "An unknown scan error occurred.";
             }
         } else {
             view.currentState = StateType::EntryContents;

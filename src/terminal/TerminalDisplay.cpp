@@ -1,9 +1,56 @@
 #include "TerminalDisplay.h"
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+namespace {
+
+void clearTerminalScreen() {
+#ifdef _WIN32
+    const HANDLE outputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (outputHandle == nullptr || outputHandle == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    CONSOLE_SCREEN_BUFFER_INFO bufferInfo{};
+    if (!GetConsoleScreenBufferInfo(outputHandle, &bufferInfo)) {
+        return;
+    }
+
+    const COORD home{0, 0};
+    const DWORD cellCount =
+        static_cast<DWORD>(bufferInfo.dwSize.X) *
+        static_cast<DWORD>(bufferInfo.dwSize.Y);
+    DWORD cellsWritten = 0;
+
+    FillConsoleOutputCharacterW(
+        outputHandle,
+        L' ',
+        cellCount,
+        home,
+        &cellsWritten
+    );
+    FillConsoleOutputAttribute(
+        outputHandle,
+        bufferInfo.wAttributes,
+        cellCount,
+        home,
+        &cellsWritten
+    );
+    SetConsoleCursorPosition(outputHandle, home);
+#else
+    std::cout << "\033[2J\033[H";
+#endif
+}
+
+}
+
 TerminalDisplay::TerminalDisplay()
     : displayText() {}
 
 void TerminalDisplay::display() const {
+    clearTerminalScreen();
     std::cout << displayText;
 }
 
@@ -65,6 +112,8 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             appendText("Available Drives:\n\n");
             if (fileSystem.drives.empty()) {
                 appendText("No drives were found.\n");
+                appendText("\nCommands: q = Quit\n");
+                appendText("Enter a command: ");
                 break;
             }
 
@@ -87,10 +136,23 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             if (view.selectedEntry == nullptr) {
                 appendText("Scanning...");
             } else {
-                appendText(std::format("Scanning {}...\n", view.selectedEntry->name()));
-                appendText(std::format("File Count: {}...\n", fileSystem.progress.filesScanned.load()));
-                appendText(std::format("Size {}...\n", formatSize(fileSystem.progress.bytesScanned.load())));
-                appendText(std::format("Failed Entries {}...\n", fileSystem.progress.failedEntries.load()));
+                appendText(std::format("Scanning {}...\n\n", view.selectedEntry->name()));
+                appendText(std::format(
+                    "Files scanned:       {}\n",
+                    fileSystem.progress.filesScanned.load()
+                ));
+                appendText(std::format(
+                    "Directories found:   {}\n",
+                    fileSystem.progress.directoriesScanned.load()
+                ));
+                appendText(std::format(
+                    "Data found:          {}\n",
+                    formatSize(fileSystem.progress.bytesScanned.load())
+                ));
+                appendText(std::format(
+                    "Inaccessible entries: {}\n",
+                    fileSystem.progress.failedEntries.load()
+                ));
             }
             break;
 
@@ -105,6 +167,7 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             appendText(std::format("\n\nFScope - {}\n\n", view.selectedEntry->name()));
 
             appendText(std::format("Total size: {}\n", formatSize(view.selectedEntry->size)));
+            appendText(std::format("Total files: {}\n", view.selectedEntry->fileCount));
 
             std::string scanStatus;
 
@@ -151,7 +214,10 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
 
             for (std::size_t i = 0; i < view.selectedEntry->children.size(); ++i) {
                 const auto& child = view.selectedEntry->children[i];
-                const std::string entryType = child->isDirectory ? "Directory" : "File";
+                const std::string entryType =
+                    child->isLink
+                        ? "Link"
+                        : child->isDirectory ? "Directory" : "File";
                 const double percentOfParent =
                     view.selectedEntry->size == 0
                         ? 0.0
@@ -178,7 +244,7 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
                 appendText("Enter a command: ");
             } else {
                 appendText(std::format(
-                    "Select a directory [1-{}]: ",
+                    "Select a directory by number [1-{}] (files/links are view-only): ",
                     view.selectedEntry->children.size()
                 ));
             }
@@ -192,5 +258,6 @@ void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& vie
             appendText("Enter a command: ");
             break;
     }
+    clearTerminalScreen();
     std::cout << displayText << std::flush;
 }
