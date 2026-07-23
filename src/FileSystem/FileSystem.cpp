@@ -37,11 +37,14 @@ void FileSystem::initializeDrives()
 }
 
 
-std::uintmax_t FileSystem::scanEntry(FileEntry* entry){
+std::uintmax_t FileSystem::scanEntry(
+    FileEntry* entry,
+    std::stop_token stopToken
+) {
     if (entry == nullptr) {
         throw std::invalid_argument("Cannot scan a null file entry.");
     }
 
-    fileScanner.scanEntryRecursively(entry, progress);
+    fileScanner.scanEntryRecursively(entry, progress, stopToken);
     return entry->size;
 }

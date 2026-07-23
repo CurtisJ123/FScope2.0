@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <stop_token>
 #include <iostream>
 #include <utility>
 #include <FileEntry.h>
@@ -19,5 +20,8 @@ public:
 	ScanProgress progress;
 
 	void initializeDrives();
-	std::uintmax_t scanEntry(FileEntry* entry);
+	std::uintmax_t scanEntry(
+		FileEntry* entry,
+		std::stop_token stopToken = {}
+	);
 };

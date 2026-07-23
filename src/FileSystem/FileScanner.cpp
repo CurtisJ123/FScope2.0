@@ -7,12 +7,20 @@ void FileScanner::calculateFileSize(FileEntry* entry){
     entry->size = fs::file_size(entry->path);
 }
 
-void FileScanner::scanEntryRecursively(FileEntry* entry, ScanProgress& progress){
+void FileScanner::scanEntryRecursively(
+    FileEntry* entry,
+    ScanProgress& progress,
+    std::stop_token stopToken
+) {
     entry->children.clear();
     entry->size = 0;
     entry->fileCount = 0;
     entry->scanFailed = false;
     entry->scanError.clear();
+
+    if (stopToken.stop_requested()) {
+        return;
+    }
 
     if (!entry->isDirectory) {
         calculateFileSize(entry);
@@ -33,6 +41,10 @@ void FileScanner::scanEntryRecursively(FileEntry* entry, ScanProgress& progress)
         }
 
         for (const auto& directoryEntry : fs::directory_iterator(entry->path)) {
+            if (stopToken.stop_requested()) {
+                break;
+            }
+
             auto child = std::make_unique<FileEntry>(directoryEntry.path());
             child->parent = entry;
 
@@ -42,7 +54,7 @@ void FileScanner::scanEntryRecursively(FileEntry* entry, ScanProgress& progress)
                     child->isDirectory = false;
                 } else {
                     child->isDirectory = directoryEntry.is_directory();
-                    scanEntryRecursively(child.get(), progress);
+                    scanEntryRecursively(child.get(), progress, stopToken);
                 }
             } catch (const std::exception& error) {
                 child->scanFailed = true;

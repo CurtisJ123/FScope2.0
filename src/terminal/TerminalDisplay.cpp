@@ -1,81 +1,43 @@
 #include "TerminalDisplay.h"
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
+#include <ftxui/dom/elements.hpp>
+
+#include <algorithm>
+#include <array>
+#include <format>
+#include <string_view>
+#include <utility>
 
 namespace {
 
-void clearTerminalScreen() {
-#ifdef _WIN32
-    const HANDLE outputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (outputHandle == nullptr || outputHandle == INVALID_HANDLE_VALUE) {
-        return;
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const std::u8string utf8Path = path.u8string();
+    return {
+        reinterpret_cast<const char*>(utf8Path.data()),
+        utf8Path.size()
+    };
+}
+
+std::string entryType(const FileEntry& entry) {
+    if (entry.isLink) {
+        return "Link";
     }
 
-    CONSOLE_SCREEN_BUFFER_INFO bufferInfo{};
-    if (!GetConsoleScreenBufferInfo(outputHandle, &bufferInfo)) {
-        return;
-    }
+    return entry.isDirectory ? "Directory" : "File";
+}
 
-    const COORD home{0, 0};
-    const DWORD cellCount =
-        static_cast<DWORD>(bufferInfo.dwSize.X) *
-        static_cast<DWORD>(bufferInfo.dwSize.Y);
-    DWORD cellsWritten = 0;
+ftxui::Element rightAligned(std::string value, int width) {
+    using namespace ftxui;
 
-    FillConsoleOutputCharacterW(
-        outputHandle,
-        L' ',
-        cellCount,
-        home,
-        &cellsWritten
-    );
-    FillConsoleOutputAttribute(
-        outputHandle,
-        bufferInfo.wAttributes,
-        cellCount,
-        home,
-        &cellsWritten
-    );
-    SetConsoleCursorPosition(outputHandle, home);
-#else
-    std::cout << "\033[2J\033[H";
-#endif
+    return hbox({
+        filler(),
+        text(std::move(value)),
+    }) | size(WIDTH, EQUAL, width);
 }
 
 }
 
-TerminalDisplay::TerminalDisplay()
-    : displayText() {}
-
-void TerminalDisplay::display() const {
-    clearTerminalScreen();
-    std::cout << displayText;
-}
-
-void TerminalDisplay::setBufferText(const std::string& dt) {
-    displayText = dt;
-}
-
-void TerminalDisplay::setDisplayText() {
-    displayText = "";
-}
-
-void TerminalDisplay::clearBuffer(){
-    displayText = "";
-}
-
-void TerminalDisplay::appendText(const std::string& at){
-    displayText += at;
-}
-
-void TerminalDisplay::appendText(const int& number){
-    displayText += std::to_string(number);
-}
-
-std::string TerminalDisplay::formatSize(std::uintmax_t bytes) const
-{
+std::string TerminalDisplay::formatSize(std::uintmax_t bytes) const {
     constexpr std::array<std::string_view, 5> units{
         "B", "KB", "MB", "GB", "TB"
     };
@@ -104,160 +66,385 @@ std::string TerminalDisplay::formatSize(std::uintmax_t bytes) const
     );
 }
 
-void TerminalDisplay::display(const FileSystem& fileSystem, const ViewState& view){
-    switch(view.currentState){
-        case StateType::DriveSelection:
-            clearBuffer();
-            appendText("\n\nFScope\n\n");
-            appendText("Available Drives:\n\n");
-            if (fileSystem.drives.empty()) {
-                appendText("No drives were found.\n");
-                appendText("\nCommands: q = Quit\n");
-                appendText("Enter a command: ");
-                break;
-            }
+std::vector<std::string> TerminalDisplay::buildMenuEntries(
+    const FileSystem& fileSystem,
+    const ViewState& view
+) const {
+    std::vector<std::string> entries;
 
-            for(std::size_t i = 0; i < fileSystem.drives.size(); ++i){
-                appendText(std::format("{}. {}\n", i + 1, fileSystem.drives[i]->name()));
-            }
+    if (view.currentState == StateType::DriveSelection) {
+        entries.reserve(fileSystem.drives.size());
 
-            if (!view.statusMessage.empty()) {
-                appendText(std::format("\n{}\n", view.statusMessage));
-            }
+        for (const auto& drive : fileSystem.drives) {
+            entries.push_back(drive->name());
+        }
 
-            appendText("\nCommands: q = Quit\n");
-            appendText(std::format("Select a drive [1-{}]: ", fileSystem.drives.size()));
-            break;
+        return entries;
+    }
 
-        case StateType::Scanning:
-            clearBuffer();
-            appendText("\n\nFScope\n\n");
+    if (view.currentState != StateType::EntryContents ||
+        view.selectedEntry == nullptr) {
+        return entries;
+    }
 
-            if (view.selectedEntry == nullptr) {
-                appendText("Scanning...");
-            } else {
-                appendText(std::format("Scanning {}...\n\n", view.selectedEntry->name()));
-                appendText(std::format(
-                    "Files scanned:       {}\n",
-                    fileSystem.progress.filesScanned.load()
-                ));
-                appendText(std::format(
-                    "Directories found:   {}\n",
-                    fileSystem.progress.directoriesScanned.load()
-                ));
-                appendText(std::format(
-                    "Data found:          {}\n",
-                    formatSize(fileSystem.progress.bytesScanned.load())
-                ));
-                appendText(std::format(
-                    "Inaccessible entries: {}\n",
-                    fileSystem.progress.failedEntries.load()
-                ));
-            }
-            break;
+    entries.reserve(view.selectedEntry->children.size());
 
-        case StateType::EntryContents: {
-            clearBuffer();
+    for (const auto& child : view.selectedEntry->children) {
+        entries.push_back(child->name());
+    }
 
-            if (view.selectedEntry == nullptr || !view.selectedEntry->isDirectory) {
-                appendText("No directory is selected.\n");
-                break;
-            }
+    return entries;
+}
 
-            appendText(std::format("\n\nFScope - {}\n\n", view.selectedEntry->name()));
+ftxui::MenuOption TerminalDisplay::buildMenuOption(
+    const FileSystem& fileSystem,
+    const ViewState& view
+) const {
+    using namespace ftxui;
 
-            appendText(std::format("Total size: {}\n", formatSize(view.selectedEntry->size)));
-            appendText(std::format("Total files: {}\n", view.selectedEntry->fileCount));
+    MenuOption option = MenuOption::Vertical();
+    option.entries_option.transform =
+        [this, &fileSystem, &view](const EntryState& state) {
+            Element row;
 
-            std::string scanStatus;
-
-            switch (view.scanningState) {
-                case ScanningState::NotStarted:
-                    scanStatus = "Not started";
-                    break;
-
-                case ScanningState::InProgress:
-                    scanStatus = "Scanning";
-                    break;
-
-                case ScanningState::Complete:
-                    scanStatus = "Complete";
-                    break;
-
-                case ScanningState::Partial:
-                    scanStatus = "Partial";
-                    break;
-
-                case ScanningState::Failed:
-                    scanStatus = "Failed";
-                    break;
-            }
-
-            appendText(std::format("Scan status: {}\n", scanStatus));
-
-            if (!view.statusMessage.empty()) {
-                appendText(std::format("\n{}\n", view.statusMessage));
-            }
-
-            appendText("\n");
-
-            appendText(std::format(
-                "{:>4}  {:<30} {:<12} {:>12} {:>9}\n",
-                "#",
-                "Name",
-                "Type",
-                "Size",
-                "Parent %"
-            ));
-
-            appendText(std::string(72, '-') + "\n");
-
-            for (std::size_t i = 0; i < view.selectedEntry->children.size(); ++i) {
-                const auto& child = view.selectedEntry->children[i];
-                const std::string entryType =
-                    child->isLink
-                        ? "Link"
-                        : child->isDirectory ? "Directory" : "File";
+            if (view.currentState == StateType::DriveSelection &&
+                state.index >= 0 &&
+                state.index < static_cast<int>(fileSystem.drives.size())) {
+                row = hbox({
+                    text(state.active ? "> " : "  ") |
+                        color(Color::Cyan),
+                    rightAligned(
+                        std::format("{}.", state.index + 1),
+                        5
+                    ),
+                    text(" "),
+                    text(
+                        fileSystem.drives[
+                            static_cast<std::size_t>(state.index)
+                        ]->name()
+                    ) | flex,
+                });
+            } else if (
+                view.currentState == StateType::EntryContents &&
+                view.selectedEntry != nullptr &&
+                state.index >= 0 &&
+                state.index < static_cast<int>(
+                    view.selectedEntry->children.size()
+                )
+            ) {
+                const FileEntry& child =
+                    *view.selectedEntry->children[
+                        static_cast<std::size_t>(state.index)
+                    ];
                 const double percentOfParent =
                     view.selectedEntry->size == 0
                         ? 0.0
-                        : static_cast<double>(child->size) /
-                            static_cast<double>(view.selectedEntry->size) * 100.0;
+                        : static_cast<double>(child.size) /
+                            static_cast<double>(view.selectedEntry->size) *
+                            100.0;
 
-                appendText(std::format(
-                    "{:>4}. {:<30} {:<12} {:>12} {:>8.1f}%\n",
-                    i + 1,
-                    child->name(),
-                    entryType,
-                    formatSize(child->size),
-                    percentOfParent
-                ));
-            }
-
-            if (view.selectedEntry->children.empty()) {
-                appendText("\nNo child entries were found.\n");
-            }
-
-            appendText("\nCommands: o = Open, b = Back, q = Quit\n");
-
-            if (view.selectedEntry->children.empty()) {
-                appendText("Enter a command: ");
+                row = hbox({
+                    text(state.active ? "> " : "  ") |
+                        color(Color::Cyan),
+                    rightAligned(
+                        std::format("{}.", state.index + 1),
+                        7
+                    ),
+                    text(" "),
+                    text(child.name()) | flex,
+                    text(entryType(child)) |
+                        size(WIDTH, EQUAL, 12),
+                    rightAligned(formatSize(child.size), 13),
+                    rightAligned(
+                        std::format("{:.1f}%", percentOfParent),
+                        11
+                    ),
+                });
             } else {
-                appendText(std::format(
-                    "Select a directory by number [1-{}] (files/links are view-only): ",
-                    view.selectedEntry->children.size()
-                ));
+                row = text(state.label);
             }
+
+            if (state.focused) {
+                row = std::move(row) | inverted;
+            }
+            if (state.active) {
+                row = std::move(row) | bold;
+            }
+
+            return row;
+        };
+
+    return option;
+}
+
+ftxui::Element TerminalDisplay::render(
+    const FileSystem& fileSystem,
+    const ViewState& view,
+    ftxui::Element menu
+) const {
+    using namespace ftxui;
+
+    std::string location = "Drive selection";
+    if (view.selectedEntry != nullptr) {
+        location = pathToUtf8(view.selectedEntry->path);
+    }
+
+    Element body;
+    switch (view.currentState) {
+        case StateType::DriveSelection:
+            body = renderDriveSelection(fileSystem, std::move(menu));
             break;
-        }
+        case StateType::Scanning:
+            body = renderScanning(fileSystem, view);
+            break;
+        case StateType::EntryContents:
+            body = renderEntryContents(view, std::move(menu));
+            break;
         case StateType::Error:
-            clearBuffer();
-            appendText("\n\nFScope\n\n");
-            appendText(view.statusMessage);
-            appendText("\n\nCommands: b = Back, q = Quit\n");
-            appendText("Enter a command: ");
+            body = renderError(view);
             break;
     }
-    clearTerminalScreen();
-    std::cout << displayText << std::flush;
+
+    return vbox({
+        hbox({
+            text(" FScope ") | bold | color(Color::Cyan),
+            filler(),
+            text(location) | dim,
+        }),
+        separator(),
+        std::move(body) | flex,
+        separator(),
+        renderStatus(view),
+        text(commandHint(view.currentState)) | dim,
+    }) | border;
+}
+
+ftxui::Element TerminalDisplay::renderDriveSelection(
+    const FileSystem& fileSystem,
+    ftxui::Element menu
+) const {
+    using namespace ftxui;
+
+    if (fileSystem.drives.empty()) {
+        return vbox({
+            filler(),
+            hbox({
+                filler(),
+                text("No drives were found.") | color(Color::Red),
+                filler(),
+            }),
+            filler(),
+        });
+    }
+
+    return vbox({
+        text("Available drives") | bold,
+        text("Choose a drive to scan.") | dim,
+        separator(),
+        std::move(menu) | vscroll_indicator | frame | flex,
+    });
+}
+
+ftxui::Element TerminalDisplay::renderScanning(
+    const FileSystem& fileSystem,
+    const ViewState& view
+) const {
+    using namespace ftxui;
+
+    const std::string entryName =
+        view.selectedEntry == nullptr
+            ? "selected entry"
+            : view.selectedEntry->name();
+
+    auto counter = [](std::string label, std::string value) {
+        return hbox({
+            text(std::move(label)),
+            filler(),
+            text(std::move(value)) | bold,
+        });
+    };
+
+    return vbox({
+        filler(),
+        hbox({
+            filler(),
+            vbox({
+                text(std::format("Scanning {}...", entryName)) |
+                    bold | color(Color::Cyan),
+                separator(),
+                counter(
+                    "Files scanned",
+                    std::to_string(fileSystem.progress.filesScanned.load())
+                ),
+                counter(
+                    "Directories found",
+                    std::to_string(
+                        fileSystem.progress.directoriesScanned.load()
+                    )
+                ),
+                counter(
+                    "Data found",
+                    formatSize(fileSystem.progress.bytesScanned.load())
+                ),
+                counter(
+                    "Inaccessible entries",
+                    std::to_string(fileSystem.progress.failedEntries.load())
+                ),
+                separator(),
+                text("Totals update as the file tree is discovered.") | dim,
+            }) | border,
+            filler(),
+        }),
+        filler(),
+    });
+}
+
+ftxui::Element TerminalDisplay::renderEntryContents(
+    const ViewState& view,
+    ftxui::Element menu
+) const {
+    using namespace ftxui;
+
+    if (view.selectedEntry == nullptr ||
+        !view.selectedEntry->isDirectory) {
+        return text("No directory is selected.") | color(Color::Red);
+    }
+
+    std::vector<Element> contents{
+        hbox({
+            text(std::format(
+                "Total size: {}",
+                formatSize(view.selectedEntry->size)
+            )),
+            text("   "),
+            text(std::format(
+                "Files: {}",
+                view.selectedEntry->fileCount
+            )),
+            text("   "),
+            text(std::format(
+                "Scan: {}",
+                scanStatus(view.scanningState)
+            )),
+        }),
+        separator(),
+        hbox({
+            text("  "),
+            rightAligned("#", 7),
+            text(" "),
+            text("Name") | flex,
+            text("Type") | size(WIDTH, EQUAL, 12),
+            rightAligned("Size", 13),
+            rightAligned("Parent %", 11),
+        }) | bold,
+        separator(),
+    };
+
+    if (view.selectedEntry->children.empty()) {
+        contents.push_back(
+            text("No child entries were found.") | dim
+        );
+        contents.push_back(filler());
+    } else {
+        contents.push_back(
+            std::move(menu) | vscroll_indicator | frame | flex
+        );
+    }
+
+    return vbox(std::move(contents));
+}
+
+ftxui::Element TerminalDisplay::renderError(const ViewState& view) const {
+    using namespace ftxui;
+
+    return vbox({
+        filler(),
+        hbox({
+            filler(),
+            vbox({
+                text("The scan could not be completed.") |
+                    bold | color(Color::Red),
+                separator(),
+                text(view.statusMessage),
+            }) | border,
+            filler(),
+        }),
+        filler(),
+    });
+}
+
+ftxui::Element TerminalDisplay::renderStatus(
+    const ViewState& view
+) const {
+    using namespace ftxui;
+
+    if (view.currentState == StateType::Error) {
+        return text("");
+    }
+
+    if (!view.selectionInput.empty()) {
+        std::string selectionStatus = std::format(
+            "Number: {}   Enter: Choose   Backspace: Edit",
+            view.selectionInput
+        );
+
+        if (!view.statusMessage.empty()) {
+            selectionStatus += std::format(
+                "   {}",
+                view.statusMessage
+            );
+        }
+
+        return text(std::move(selectionStatus)) |
+            color(
+                view.statusMessage.empty()
+                    ? Color::Cyan
+                    : Color::Yellow
+            );
+    }
+
+    if (view.statusMessage.empty()) {
+        return text("");
+    }
+
+    const Color statusColor =
+        view.scanningState == ScanningState::Partial ||
+        view.currentState == StateType::Scanning
+            ? Color::Yellow
+            : Color::Cyan;
+
+    return text(view.statusMessage) | color(statusColor);
+}
+
+std::string TerminalDisplay::commandHint(StateType state) const {
+    switch (state) {
+        case StateType::DriveSelection:
+            return " Up/Down or number: Select   Enter: Scan   q: Quit";
+        case StateType::Scanning:
+            return " Scanning in progress   q: Cancel scan and quit";
+        case StateType::EntryContents:
+            return " Up/Down or number: Select   Enter: Open directory   "
+                   "b/Esc: Back   o: File Explorer   q: Quit";
+        case StateType::Error:
+            return " b/Esc: Back to drives   q: Quit";
+    }
+
+    return {};
+}
+
+std::string TerminalDisplay::scanStatus(ScanningState state) const {
+    switch (state) {
+        case ScanningState::NotStarted:
+            return "Not started";
+        case ScanningState::InProgress:
+            return "Scanning";
+        case ScanningState::Complete:
+            return "Complete";
+        case ScanningState::Partial:
+            return "Partial";
+        case ScanningState::Failed:
+            return "Failed";
+    }
+
+    return "Unknown";
 }

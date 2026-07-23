@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
+#include <stop_token>
 #include <string>
 #include <vector>
 #include "FileEntry.h"
@@ -28,7 +29,11 @@ public:
 
     void calculateFileSize(FileEntry* entry);
 
-    void scanEntryRecursively(FileEntry* entry, ScanProgress& progress);
+    void scanEntryRecursively(
+        FileEntry* entry,
+        ScanProgress& progress,
+        std::stop_token stopToken = {}
+    );
 
 private:
 };

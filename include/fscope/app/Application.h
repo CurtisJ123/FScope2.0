@@ -1,13 +1,8 @@
 #pragma once
 
 #include "TerminalDisplay.h"
-#include "TerminalInput.h"
 
 #include "FileSystem.h"
-#include "FileEntry.h"
-
-#include "PlatformShell.h"
-
 
 class Application {
 public:
@@ -18,6 +13,5 @@ public:
 
 private:
 	TerminalDisplay terminalDisplay;
-	TerminalInput terminalInput;
 	FileSystem fileSystem;
 };

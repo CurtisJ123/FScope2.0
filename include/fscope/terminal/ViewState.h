@@ -24,6 +24,7 @@ public:
     ~ViewState() = default;
 
     int selectedIndex = 0;
+    std::string selectionInput = "";
     std::string statusMessage = "";
     ScanningState scanningState = NotStarted;
     StateType currentState = DriveSelection;
