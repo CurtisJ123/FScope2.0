@@ -164,11 +164,8 @@ ftxui::MenuOption TerminalDisplay::buildMenuOption(
                 row = text(state.label);
             }
 
-            if (state.focused) {
-                row = std::move(row) | inverted;
-            }
             if (state.active) {
-                row = std::move(row) | bold;
+                row = std::move(row) | inverted | bold;
             }
 
             return row;
